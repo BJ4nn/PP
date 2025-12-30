@@ -1,0 +1,438 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  WORKER
+  COMPANY
+  ADMIN
+}
+
+enum ExperienceLevel {
+  NONE
+  BASIC
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum Region {
+  BA
+  SENEC
+  TRNAVA
+  GALANTA
+}
+
+enum WarehouseType {
+  WAREHOUSE
+  FULFILLMENT
+  RETAIL_DISTRIBUTION
+  PRODUCTION_SUPPORT
+  OTHER
+}
+
+enum JobStatus {
+  OPEN
+  FULL
+  CLOSED
+  CANCELLED
+}
+
+enum JobWaveStage {
+  WAVE1
+  WAVE2
+  PUBLIC
+}
+
+enum ApplicationStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELLED_BY_WORKER
+  CANCELLED_BY_COMPANY
+  WORKER_CANCELED_LATE
+  COMPANY_CANCELED_LATE
+}
+
+enum PhysicalLevel {
+  LIGHT
+  MEDIUM
+  HEAVY
+}
+
+enum CanceledBy {
+  WORKER
+  COMPANY
+  SYSTEM
+}
+
+enum ApplicationPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+enum NotificationType {
+  WORKER_APPLICATION_CONFIRMED
+  WORKER_APPLICATION_REJECTED
+  WORKER_APPLICATION_CANCELED_BY_COMPANY
+  WORKER_APPLICATION_CANCELED_LATE_BY_COMPANY
+  WORKER_JOB_CANCELED
+  COMPANY_NEW_APPLICATION
+  COMPANY_APPLICATION_CANCELED_BY_WORKER
+  COMPANY_APPLICATION_CANCELED_LATE_BY_WORKER
+  WORKER_CONTRACT_READY
+  COMPANY_CONTRACT_READY
+  COMPANY_CONTRACT_COMPLETED
+  ON_CALL_PING
+}
+
+enum ContractStatus {
+  PENDING_WORKER
+  SIGNED_BY_WORKER
+  COMPLETED
+  VOID
+  PENDING_COMPANY
+  SIGNED_BY_COMPANY
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  VOID
+}
+
+enum ContractType {
+  EMPLOYMENT
+  TRADE_LICENSE
+
+  @@map("ContractTypeV2")
+}
+
+enum NoticeWindow {
+  H12
+  H24
+  H48
+
+  @@map("NoticeWindowV2")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         UserRole
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workerProfile  WorkerProfile?
+  companyProfile CompanyProfile?
+  notifications  Notification[]
+}
+
+model WorkerProfile {
+  id                        String          @id @default(cuid())
+  userId                    String          @unique
+  name                      String
+  phone                     String
+  city                      String
+  region                    Region
+  billingName               String?
+  billingStreet             String?
+  billingZip                String?
+  billingIban               String?
+  billingIco                String?         @db.VarChar(32)
+  hasTradeLicense           Boolean         @default(false)
+  experienceLevel           ExperienceLevel @default(NONE)
+  hasVZV                    Boolean         @default(false)
+  hasBOZP                   Boolean         @default(false)
+  hasFoodCard               Boolean         @default(false)
+  hasCar                    Boolean         @default(false)
+  preferredContractType     ContractType?
+  isOnCallPreferred         Boolean         @default(false)
+  noticePreference          NoticeWindow    @default(H24)
+  availabilityJson          Json
+  minHourlyRate             Float?
+  minHourlyRateEmployment   Float?
+  minHourlyRateTradeLicense Float?
+  isReady                   Boolean         @default(false)
+  activityScore             Int             @default(0)
+  reliabilityScore          Int             @default(0)
+  lastReadyAt               DateTime?
+  lastActiveAt              DateTime?
+  onboardingComplete        Boolean         @default(false)
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applications      JobApplication[]
+  contractDocuments ContractDocument[]
+  invoices          Invoice[]
+  companyRelations  WorkerCompanyRelation[]
+
+  @@index([isReady, isOnCallPreferred, region, city], map: "WorkerProfile_ready_oncall_region_city_idx")
+}
+
+model WorkerCompanyRelation {
+  id                    String         @id @default(cuid())
+  companyId             String
+  workerId              String
+  isFavorite            Boolean        @default(false)
+  isPriority            Boolean        @default(false)
+  isNarrowCollaboration Boolean        @default(false)
+  narrowGroupId         String?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  company CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  worker  WorkerProfile  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  narrowGroup CompanyNarrowCollaborationGroup? @relation(fields: [narrowGroupId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, workerId], map: "WorkerCompanyRelation_company_worker_key")
+  @@index([workerId], map: "WorkerCompanyRelation_worker_idx")
+  @@index([companyId], map: "WorkerCompanyRelation_company_idx")
+  @@index([narrowGroupId], map: "WorkerCompanyRelation_narrow_group_idx")
+}
+
+model CompanyProfile {
+  id                 String        @id @default(cuid())
+  userId             String        @unique
+  companyName        String
+  siteName           String?
+  contactName        String
+  contactPhone       String
+  addressStreet      String
+  addressCity        String
+  addressZip         String
+  region             Region
+  warehouseType      WarehouseType
+  ico                String?       @db.VarChar(32)
+  onboardingComplete Boolean       @default(false)
+  isApproved         Boolean       @default(false)
+  advancedModeEnabled Boolean      @default(false)
+  narrowCollaborationCutoffHour Int @default(12)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobs              Job[]
+  contractTemplate  ContractTemplate?
+  contractDocuments ContractDocument[]
+  invoices          Invoice[]
+  workerRelations   WorkerCompanyRelation[]
+  narrowGroups      CompanyNarrowCollaborationGroup[]
+  narrowSchemes     CompanyNarrowCollaborationScheme[]
+}
+
+model CompanyNarrowCollaborationGroup {
+  id              String   @id @default(cuid())
+  companyId       String
+  name            String
+  maxAdvanceWeeks Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company         CompanyProfile           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  workerRelations WorkerCompanyRelation[]
+
+  @@index([companyId], map: "CompanyNarrowCollaborationGroup_company_idx")
+}
+
+model CompanyNarrowCollaborationScheme {
+  id         String   @id @default(cuid())
+  companyId  String
+  name       String
+  daysOfWeek String[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "CompanyNarrowCollaborationScheme_company_idx")
+}
+
+model Job {
+  id                          String           @id @default(cuid())
+  companyId                   String
+  title                       String
+  description                 String
+  locationCity                String
+  locationAddress             String           @default("")
+  region                      Region
+  warehouseType               WarehouseType
+  positionTypes               String[]
+  startsAt                    DateTime
+  endsAt                      DateTime
+  durationHours               Int
+  hourlyRate                  Decimal          @db.Decimal(10, 2)
+  requiredVzv                 Boolean          @default(false)
+  minExperience               ExperienceLevel?
+  physicalLevel               PhysicalLevel    @default(MEDIUM)
+  neededWorkers               Int
+  status                      JobStatus        @default(OPEN)
+  waveStage                   JobWaveStage     @default(WAVE1)
+  waveStartedAt               DateTime         @default(now())
+  isUrgent                    Boolean          @default(false)
+  urgentBonusEur              Int?
+  confirmBy                   DateTime?
+  isBundle                    Boolean          @default(false)
+  bundleMinHours              Int?
+  bundleMinDays               Int?
+  bundleBonusEur              Int?
+  bundleHourlyRateEur         Decimal?         @db.Decimal(10, 2)
+  contractType                ContractType?
+  requiresOnCall              Boolean          @default(false)
+  noticeWindow                NoticeWindow     @default(H24)
+  cancellationCompensationPct Float            @default(0)
+  payEmployment               Float?
+  payTradeLicense             Float?
+  onCallBonus                 Float?
+  createdAt                   DateTime         @default(now())
+  updatedAt                   DateTime         @updatedAt
+
+  company           CompanyProfile     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  applications      JobApplication[]
+  contractDocuments ContractDocument[]
+
+  @@index([contractType, requiresOnCall, startsAt], map: "Job_contract_oncall_starts_idx")
+  @@index([status, region, startsAt], map: "Job_status_region_starts_idx")
+}
+
+model JobApplication {
+  id                      String              @id @default(cuid())
+  jobId                   String
+  workerId                String
+  status                  ApplicationStatus   @default(PENDING)
+  note                    String?
+  matchScore              Int                 @default(0)
+  priority                ApplicationPriority @default(NORMAL)
+  estimatedEarningsEur    Int?
+  workedConfirmedAt       DateTime?
+  workerWorkedConfirmedAt DateTime?
+  workerWorkedNote        String?
+  workerRatingStars       Int?
+  compensationAmount      Float               @default(0)
+  canceledAt              DateTime?
+  canceledBy              CanceledBy?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  job              Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  worker           WorkerProfile     @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  contractDocument ContractDocument?
+  invoiceLine      InvoiceLine?
+
+  @@unique([jobId, workerId])
+  @@index([jobId, status], map: "JobApplication_job_status_idx")
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  workerId      String
+  companyId     String
+  invoiceNumber String        @unique
+  status        InvoiceStatus @default(DRAFT)
+  issuedAt      DateTime      @default(now())
+  dueAt         DateTime
+  currency      String        @default("EUR")
+  totalEur      Int
+  meta          Json?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  worker  WorkerProfile  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  company CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lines   InvoiceLine[]
+
+  @@index([workerId, createdAt])
+  @@index([companyId, createdAt])
+}
+
+model InvoiceLine {
+  id            String   @id @default(cuid())
+  invoiceId     String
+  applicationId String   @unique
+  jobTitle      String
+  startsAt      DateTime
+  endsAt        DateTime
+  hours         Int
+  amountEur     Int
+
+  invoice     Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  application JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+}
+
+model ContractTemplate {
+  id             String   @id @default(cuid())
+  companyId      String   @unique
+  title          String
+  intro          String?
+  workplaceRules String?
+  customTerms    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company   CompanyProfile     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  documents ContractDocument[]
+}
+
+model ContractDocument {
+  id                     String         @id @default(cuid())
+  companyId              String
+  workerId               String
+  jobId                  String
+  applicationId          String         @unique
+  templateId             String?
+  status                 ContractStatus @default(PENDING_WORKER)
+  titleSnapshot          String
+  bodySnapshot           String
+  documentSha256         String?
+  workerSignedAt         DateTime?
+  workerSignatureName    String?
+  workerSignatureJson    Json?
+  workerSignatureSha256  String?
+  workerSignedIp         String?
+  workerSignedUserAgent  String?
+  companySignedAt        DateTime?
+  companySignatureName   String?
+  companySignatureJson   Json?
+  companySignatureSha256 String?
+  companySignedIp        String?
+  companySignedUserAgent String?
+  voidedAt               DateTime?
+  voidReason             String?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  company     CompanyProfile    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  worker      WorkerProfile     @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  job         Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  application JobApplication    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  template    ContractTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([workerId, createdAt])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  meta      Json?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  readAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "Notification_userId_idx")
+  @@index([userId, isRead], map: "Notification_userId_isRead_idx")
+}
