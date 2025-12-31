@@ -19,7 +19,11 @@ export default async function middleware(req: NextRequest) {
   }
 
   const secret = process.env.NEXTAUTH_SECRET;
-  const token = await getToken(secret ? { req, secret } : { req });
+  const cookieName =
+    req.nextUrl.protocol === "https:"
+      ? "__Secure-authjs.session-token"
+      : "authjs.session-token";
+  const token = await getToken(secret ? { req, secret, cookieName } : { req, cookieName });
   const role = token?.role as UserRole | undefined;
 
   if (!role) {

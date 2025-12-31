@@ -51,6 +51,18 @@ describe("middleware auth", () => {
     expect(response?.headers.get("location")).toContain("/auth/login");
   });
 
+  it("uses secure authjs cookie name for https", async () => {
+    (getToken as unknown as { mockResolvedValue: (value: unknown) => void }).mockResolvedValue(
+      null,
+    );
+
+    await middleware(makeRequest("/worker/dashboard"));
+
+    const callArg = (getToken as unknown as { mock: { calls: Array<[unknown]> } }).mock
+      .calls[0]?.[0] as { cookieName?: string };
+    expect(callArg?.cookieName).toBe("__Secure-authjs.session-token");
+  });
+
   it("redirects users to their role dashboard when route role mismatches", async () => {
     (getToken as unknown as { mockResolvedValue: (value: unknown) => void }).mockResolvedValue(
       { role: UserRole.WORKER },
