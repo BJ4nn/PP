@@ -18,7 +18,8 @@ export default async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  const secret = process.env.NEXTAUTH_SECRET;
+  const token = await getToken(secret ? { req, secret } : { req });
   const role = token?.role as UserRole | undefined;
 
   if (!role) {

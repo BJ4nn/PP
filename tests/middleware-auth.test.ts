@@ -21,6 +21,25 @@ describe("middleware auth", () => {
     vi.clearAllMocks();
   });
 
+  it("does not pass secret when missing", async () => {
+    const originalSecret = process.env.NEXTAUTH_SECRET;
+    delete process.env.NEXTAUTH_SECRET;
+    (getToken as unknown as { mockResolvedValue: (value: unknown) => void }).mockResolvedValue(
+      null,
+    );
+
+    await middleware(makeRequest("/worker/dashboard"));
+
+    const callArg = (getToken as unknown as { mock: { calls: Array<[unknown]> } }).mock
+      .calls[0]?.[0] as { secret?: string };
+    expect(callArg).toBeTruthy();
+    expect(callArg).not.toHaveProperty("secret");
+
+    if (originalSecret) {
+      process.env.NEXTAUTH_SECRET = originalSecret;
+    }
+  });
+
   it("redirects unauthenticated users to login", async () => {
     (getToken as unknown as { mockResolvedValue: (value: unknown) => void }).mockResolvedValue(
       null,
