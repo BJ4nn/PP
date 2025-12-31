@@ -24,6 +24,48 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Production setup (Vercel + external Postgres)
+
+Configure the following environment variables in your hosting platform (for Vercel: Project Settings → Environment Variables). Do not commit secrets to git.
+
+- `DATABASE_URL`: Postgres connection string (production DB).
+- `NEXTAUTH_SECRET`: Generate with `openssl rand -hex 32`.
+- `NEXTAUTH_URL`: Public app URL, e.g. `https://your-app.vercel.app`.
+- `ALLOWED_ORIGINS`: Comma-separated list including the app URL.
+- `TRUST_PROXY`: `true` when behind Vercel/proxy.
+- `EMAIL_ENABLED`: Set to `true` to send verification emails.
+- `EMAIL_FROM`: Sender address for outgoing emails.
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`: SMTP connection.
+
+Ensure your Vercel build command runs migrations:
+
+```bash
+npx prisma migrate deploy && npm run build
+```
+
+### Gmail SMTP (free)
+
+1. Enable 2FA on your Google account.
+2. Create an App Password for "Mail".
+3. Set:
+   - `SMTP_HOST=smtp.gmail.com`
+   - `SMTP_PORT=587`
+   - `SMTP_SECURE=false`
+   - `SMTP_USER=your@gmail.com`
+   - `SMTP_PASS=<app-password>`
+
+## Oracle Always Free Postgres (no sleep)
+
+If you want a free DB that does not sleep, use an Oracle Cloud Always Free VM:
+
+1. Create an Always Free VM (Ubuntu) and assign a static public IP.
+2. Install Postgres (or run it via Docker) and enable external access.
+3. Lock down port 5432 to allowed IPs if possible; use `sslmode=require`.
+4. Create a DB/user and set `DATABASE_URL` in Vercel.
+5. Optional: add a daily `pg_dump` cron for backups.
+
+For a detailed step-by-step guide, see `docs/deploy/production-vercel-oracle.md`.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

@@ -36,4 +36,43 @@ describe("mailer service", () => {
     );
     logSpy.mockRestore();
   });
+
+  it("sends email via SMTP when enabled", async () => {
+    process.env.EMAIL_ENABLED = "true";
+    process.env.EMAIL_FROM = "no-reply@example.com";
+    process.env.SMTP_HOST = "smtp.example.com";
+    process.env.SMTP_PORT = "587";
+    process.env.SMTP_USER = "smtp-user";
+    process.env.SMTP_PASS = "smtp-pass";
+    process.env.SMTP_SECURE = "false";
+
+    const sendMail = vi.fn().mockResolvedValue({});
+    const createTransport = vi.fn(() => ({ sendMail }));
+    vi.doMock("nodemailer", () => ({
+      default: { createTransport },
+    }));
+
+    const { sendTransactionalEmail } = await import("@/server/services/mailer");
+
+    await sendTransactionalEmail({
+      to: "worker@example.com",
+      subject: "Verify your account",
+      text: "Click the link",
+    });
+
+    expect(createTransport).toHaveBeenCalledWith({
+      host: "smtp.example.com",
+      port: 587,
+      secure: false,
+      auth: { user: "smtp-user", pass: "smtp-pass" },
+    });
+    expect(sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: "no-reply@example.com",
+        to: "worker@example.com",
+        subject: "Verify your account",
+        text: "Click the link",
+      }),
+    );
+  });
 });
